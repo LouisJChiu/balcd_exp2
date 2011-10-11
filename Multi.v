@@ -1,7 +1,3 @@
-/*
-  Do: A*B*2^(-256) %N
-*/
-
 module Multi( A,
               B,
               N,
@@ -10,89 +6,110 @@ module Multi( A,
               out, 
               done );
 
+// ==== IO ==== //
   input [255:0] A, B, N;
   input clk;
   input start;  // negedge
   output [255:0] out;
   output done;  // posedge
 
+// ==== Claim ====/
   reg [255:0] a, b;
   reg [255:0] a1;
-  reg [258:0] accu1, accu2, n;
-  reg [9:0] i1, i2;
-  wire clk2, clk3, clk4;
+  reg [258:0] accu1, accu2, accu3, n;
   reg done;
-  
-  initial begin
-    i1 =0;
-    i2 =0;
-    done =0;
-  end
+  reg enable_clk;
+  reg [10:0] i1, i2;
 
+/* ==== Start Case ==== //
   always @(negedge start) begin
     accu1 = 258'd0;
-    accu2 = 258'd0;
-    a = A[255:0];
-    b = B[255:0];
+    a = A;
+    b = B;
     n = { 3'd0, N[255:0] };
-    i1 =0;
-    i2 =0;
-    done =0;
+    done =1'b0;
+    $display("Start!!");
+    $display("A = %h", a);
+    $display("B = %h", b);
+    $display("N = %h", n);
+    enable_clk =1'b1;
   end
-/*
-  Do addition and shifting
-  100100011100001101 * b %n
->                  b  +/- kn => xxxxxxxxxxxxx0
 */
 
+// ==== Combinational Part ==== //
 
+  always @(*) begin
 
-//  ==== for loop edition ====
-  always @(posedge clk) begin
-    i2 = i1 +1;
-    if ( a1[0] ==1'b1 ) begin
+    if ( a[0] ==1'b1 ) begin
       accu2 = accu1 + b;
     end
     else begin
       accu2 = accu1;
     end
-  end
 
-  always @(posedge clk) begin
     if (accu2[0] ==1'b1) begin
       if (accu2 >= n) begin
-        accu1 = accu2 - n;
+        accu3 = accu2 - n;
       end
       else begin
-        accu1 = accu2 + n;
+        accu3 = accu2 + n;
       end
     end
     else begin
-      accu1 = accu2;
+      accu3 = accu2;
     end
-  end
 
-  always @(posedge clk) begin
-    i1 = i2;
-    accu2 = accu1;
-  end
-
-  always @(posedge clk) begin
-    accu1 = {1'b0, accu2[255:1] };
     a1 = {1'b0, a[255:1] };
-  end
+    i2 = i1;
 
-//
-
-  always @(a1 ==256'd0) begin
-    if (accu1 >=n) begin
-      $display("Error");
-    end
-    $display("out = %h", accu1);
-    done =1;
   end
 
   assign out[255:0] = accu1[255:0];
 
-endmodule
+// ==== Sequential Part ==== //
 
+  always @(posedge clk or negedge start) begin
+    if (~start) begin
+      accu1 = 258'd0;
+      a = A;
+      b = B;
+      n = { 3'd0, N[255:0] };
+      done =1'b0;
+      $display("Start!!");
+      $display("A = %h", a);
+      $display("B = %h", b);
+      $display("N = %h", n);
+      enable_clk =1'b1;
+      i1 = 11'd0;
+    end
+    else begin
+      if (done == 1'b1) begin
+        accu1 = accu3;
+      end
+      else begin
+        accu1 = {1'b0, accu3[258:1]};
+        a = a1;
+        i1 = i2+1;
+        $display ("Clock is ticking now! XD");
+      end
+    end
+  end
+
+// ==== End Case ==== //
+
+always @( i2 >= 11'd256 ) begin
+    if (accu3 >=n) begin
+      $display("Error");
+    end
+    $display("out = %h", accu3);
+    done =1'b1;
+    enable_clk = 1'b0;
+  end
+// ==== Pulse of "done" ==== //
+  always @(negedge clk) begin
+    if (done ==1'b1) begin
+      done =1'b0;
+    end
+  end
+
+endmodule
